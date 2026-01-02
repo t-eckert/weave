@@ -488,6 +488,26 @@ impl Parser {
     fn parse_call(&mut self) -> Expr {
         let mut expr = self.parse_primary();
 
+        // Special case: if we just parsed an identifier and the current token is LeftBrace,
+        // check if it's actually a struct literal by peeking inside
+        if let Expr::Identifier(name) = &expr {
+            if matches!(self.current_token(), Token::LeftBrace) {
+                // Peek ahead to see if this looks like a struct literal
+                // Struct literals have the pattern: { identifier: ...
+                // If we see anything else after {, it's not a struct literal
+                let next_token = self.peek(1);
+                let looks_like_struct = matches!(next_token, Token::Identifier(_));
+
+                if looks_like_struct {
+                    // Check if there's a colon after the identifier
+                    let after_id = self.peek(2);
+                    if matches!(after_id, Token::Colon) {
+                        return self.parse_struct_literal(name.clone());
+                    }
+                }
+            }
+        }
+
         loop {
             match self.current_token() {
                 Token::LeftParen => {
@@ -578,11 +598,9 @@ impl Parser {
             Token::False => Expr::Boolean(false),
             Token::Nil => Expr::Nil,
             Token::Identifier(name) => {
-                // Check if this is a struct literal (Identifier followed by LeftBrace)
-                if matches!(self.peek(1), Token::LeftBrace) {
-                    self.advance(); // consume identifier
-                    return self.parse_struct_literal(name);
-                }
+                // Check if this might be a struct literal
+                // We peek ahead to see if there's a LeftBrace after this identifier
+                // But we need to be smarter - only treat as struct if we're at statement level
                 Expr::Identifier(name)
             }
             Token::LeftParen => {

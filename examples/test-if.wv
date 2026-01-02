@@ -1,9 +1,0 @@
-fn test(a: number, b: number) -> number {
-	if a > b {
-		print("a is bigger")
-	}
-	return a
-}
-
-let result = test(10, 5)
-print(result)

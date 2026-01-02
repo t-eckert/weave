@@ -1,9 +1,19 @@
+# Complete test of return values and early returns
+
+fn add(a: number, b: number) -> number {
+	return a + b
+}
+
 fn max(a: number, b: number) -> number {
 	if a > b {
 		return a
 	}
 	return b
 }
+
+print("add(5, 3) = ")
+print(add(5, 3))
+print("\n")
 
 print("max(10, 20) = ")
 print(max(10, 20))
