@@ -10,9 +10,16 @@ pub enum Value {
     Nil,
 }
 
+#[derive(Debug, Clone)]
+struct Function {
+    params: Vec<String>,
+    body: Vec<Stmt>,
+}
+
 pub struct Executor {
     ast: Ast,
     variables: HashMap<String, Value>,
+    functions: HashMap<String, Function>,
 }
 
 impl Executor {
@@ -20,6 +27,7 @@ impl Executor {
         Executor {
             ast,
             variables: HashMap::new(),
+            functions: HashMap::new(),
         }
     }
 
@@ -39,9 +47,12 @@ impl Executor {
                 let result = self.evaluate_expression(value);
                 self.variables.insert(name.clone(), result);
             }
-            Stmt::Function { name, params, body: _ } => {
-                println!("Function declaration: {}({:?})", name, params);
-                // Store function for later - not implemented yet
+            Stmt::Function { name, params, body } => {
+                let func = Function {
+                    params: params.clone(),
+                    body: body.clone(),
+                };
+                self.functions.insert(name.clone(), func);
             }
             Stmt::If {
                 condition,
@@ -124,9 +135,51 @@ impl Executor {
                         println!("{}", output);
                         return Value::Nil;
                     }
+
+                    // User-defined functions
+                    if let Some(func) = self.functions.get(name).cloned() {
+                        // Evaluate arguments
+                        let mut arg_values = Vec::new();
+                        for arg in arguments {
+                            arg_values.push(self.evaluate_expression(arg));
+                        }
+
+                        // Check parameter count
+                        if arg_values.len() != func.params.len() {
+                            eprintln!(
+                                "Function '{}' expects {} arguments, got {}",
+                                name,
+                                func.params.len(),
+                                arg_values.len()
+                            );
+                            return Value::Nil;
+                        }
+
+                        // Save current variables
+                        let saved_vars = self.variables.clone();
+
+                        // Bind parameters to arguments
+                        for (param, value) in func.params.iter().zip(arg_values.iter()) {
+                            self.variables.insert(param.clone(), value.clone());
+                        }
+
+                        // Execute function body
+                        for stmt in &func.body {
+                            self.execute_statement(stmt);
+                        }
+
+                        // Restore variables
+                        self.variables = saved_vars;
+
+                        return Value::Nil;
+                    }
+
+                    // Unknown function
+                    eprintln!("Undefined function: {}", name);
+                    return Value::Nil;
                 }
 
-                // For other functions, just print for now
+                // For non-identifier callees, just print for now
                 println!("Function call: {:?}", callee);
                 Value::Nil
             }

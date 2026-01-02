@@ -1,0 +1,1 @@
+print("Hello, " + args.get(1) + ".")
