@@ -4,6 +4,10 @@ pub enum Type {
     Str,
     Number,
     Bool,
+    // Custom type reference (either struct or type alias)
+    Custom(String),
+    // Discriminated union (string literals)
+    Union(Vec<String>),
 }
 
 // AST Node types
@@ -84,7 +88,8 @@ pub enum Stmt {
     // Function declaration
     Function {
         name: String,
-        params: Vec<String>,
+        params: Vec<(String, Option<Type>)>,
+        return_type: Option<Type>,
         body: Vec<Stmt>,
     },
 
@@ -111,6 +116,12 @@ pub enum Stmt {
     Struct {
         name: String,
         fields: Vec<(String, Type)>,
+    },
+
+    // Type alias definition
+    TypeAlias {
+        name: String,
+        variants: Vec<String>,
     },
 }
 

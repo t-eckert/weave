@@ -1,0 +1,31 @@
+type Crust = "thick" | "regular" | "thin"
+type Size = "sm" | "md" | "lg"
+
+struct Pizza {
+	crust: Crust,
+	size: Size,
+	price: number,
+	discount: number,
+}
+
+fn tax(pizza: Pizza, percent: number) -> number {
+	return pizza.price * pizza.discount * percent
+}
+
+let pizza = Pizza {
+	crust: "thin",
+	size: "md",
+	price: 10.99,
+	discount: 0.2,
+}
+
+let tax_from_fn = tax(pizza, 0.06)
+let tax_from_assoc = pizza.tax(0.06)
+
+print("Tax from function: ")
+print(tax_from_fn)
+print("\n")
+print("Tax from method: ")
+print(tax_from_assoc)
+print("\n")
+

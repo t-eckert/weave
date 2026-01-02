@@ -1,0 +1,7 @@
+type Status = "active" | "inactive" | "pending"
+
+fn print_status(status: Status) {
+	print(status)
+}
+
+print_status("invalid_value")

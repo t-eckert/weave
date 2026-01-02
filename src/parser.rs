@@ -34,6 +34,7 @@ impl Parser {
             Token::Return => self.parse_return(),
             Token::LeftBrace => self.parse_block(),
             Token::Struct => self.parse_struct(),
+            Token::Type => self.parse_type_alias(),
             _ => self.parse_expression_statement(),
         }
     }
@@ -81,8 +82,18 @@ impl Parser {
         let mut params = Vec::new();
         while !matches!(self.current_token(), Token::RightParen) {
             if let Token::Identifier(param) = self.current_token() {
-                params.push(param.clone());
+                let param_name = param.clone();
                 self.advance();
+
+                // Check for type annotation
+                let param_type = if matches!(self.current_token(), Token::Colon) {
+                    self.advance(); // consume ':'
+                    Some(self.parse_type())
+                } else {
+                    None
+                };
+
+                params.push((param_name, param_type));
 
                 if matches!(self.current_token(), Token::Comma) {
                     self.advance();
@@ -92,6 +103,14 @@ impl Parser {
             }
         }
         self.advance(); // consume ')'
+
+        // Parse optional return type
+        let return_type = if matches!(self.current_token(), Token::Arrow) {
+            self.advance(); // consume '->'
+            Some(self.parse_type())
+        } else {
+            None
+        };
 
         // Parse body
         let body = if matches!(self.current_token(), Token::LeftBrace) {
@@ -103,7 +122,12 @@ impl Parser {
             panic!("Expected function body");
         };
 
-        Stmt::Function { name, params, body }
+        Stmt::Function {
+            name,
+            params,
+            return_type,
+            body,
+        }
     }
 
     fn parse_if(&mut self) -> Stmt {
@@ -248,6 +272,47 @@ impl Parser {
         Stmt::Struct { name, fields }
     }
 
+    fn parse_type_alias(&mut self) -> Stmt {
+        self.advance(); // consume 'type'
+
+        let name = match self.current_token() {
+            Token::Identifier(n) => n.clone(),
+            _ => panic!("Expected type alias name"),
+        };
+        self.advance();
+
+        // Expect '='
+        if !matches!(self.current_token(), Token::Equal) {
+            panic!("Expected '=' in type alias");
+        }
+        self.advance();
+
+        // Parse union variants (string literals separated by |)
+        let mut variants = Vec::new();
+
+        loop {
+            match self.current_token() {
+                Token::String(s) => {
+                    variants.push(s.clone());
+                    self.advance();
+                }
+                _ => panic!("Expected string literal in type union"),
+            }
+
+            if matches!(self.current_token(), Token::Pipe) {
+                self.advance(); // consume '|'
+            } else {
+                break;
+            }
+        }
+
+        if variants.is_empty() {
+            panic!("Type alias must have at least one variant");
+        }
+
+        Stmt::TypeAlias { name, variants }
+    }
+
     fn parse_struct_literal(&mut self, name: String) -> Expr {
         // Expect '{'
         if !matches!(self.current_token(), Token::LeftBrace) {
@@ -295,6 +360,10 @@ impl Parser {
             Token::TypeStr => Type::Str,
             Token::TypeNumber => Type::Number,
             Token::TypeBool => Type::Bool,
+            Token::Identifier(name) => {
+                // Custom type (either struct or type alias)
+                Type::Custom(name.clone())
+            }
             _ => panic!("Expected type annotation, got {:?}", self.current_token()),
         };
         self.advance();
@@ -449,7 +518,7 @@ impl Parser {
                     };
                 }
                 Token::Dot => {
-                    // Field access
+                    // Field access or method call
                     self.advance();
                     let field = match self.current_token() {
                         Token::Identifier(name) => name.clone(),
@@ -457,10 +526,42 @@ impl Parser {
                     };
                     self.advance();
 
-                    expr = Expr::FieldAccess {
-                        object: Box::new(expr),
-                        field,
-                    };
+                    // Check if this is a method call (followed by '(')
+                    if matches!(self.current_token(), Token::LeftParen) {
+                        // Method call: transform to function call with receiver as first arg
+                        self.advance(); // consume '('
+
+                        let mut arguments = vec![expr]; // receiver is first argument
+
+                        if !matches!(self.current_token(), Token::RightParen) {
+                            loop {
+                                arguments.push(self.parse_expression());
+
+                                if matches!(self.current_token(), Token::Comma) {
+                                    self.advance();
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+
+                        if !matches!(self.current_token(), Token::RightParen) {
+                            panic!("Expected ')' after arguments");
+                        }
+                        self.advance();
+
+                        // Create a function call with the method name
+                        expr = Expr::Call {
+                            callee: Box::new(Expr::Identifier(field)),
+                            arguments,
+                        };
+                    } else {
+                        // Regular field access
+                        expr = Expr::FieldAccess {
+                            object: Box::new(expr),
+                            field,
+                        };
+                    }
                 }
                 _ => break,
             }

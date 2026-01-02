@@ -1,0 +1,20 @@
+type Status = "active" | "inactive" | "pending"
+type Color = "red" | "green" | "blue"
+
+fn print_status(status: Status) {
+	print("Status: ")
+	print(status)
+	print("\n")
+}
+
+fn show_color(name, color: Color) {
+	print(name)
+	print(" is ")
+	print(color)
+	print("\n")
+}
+
+print_status("active")
+print_status("pending")
+show_color("Apple", "red")
+show_color("Sky", "blue")

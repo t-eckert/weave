@@ -16,6 +16,7 @@ pub enum Token {
     Dot,
     Semicolon,
     Colon,
+    Pipe,
 
     // Operators
     Plus,
@@ -43,11 +44,13 @@ pub enum Token {
     False,
     Nil,
     Struct,
+    Type,
 
     // Type keywords
     TypeStr,
     TypeNumber,
     TypeBool,
+    Arrow,
 
     // Special
     Eof,
@@ -131,13 +134,22 @@ impl Lexer {
                 self.advance();
                 Token::Colon
             }
+            b'|' => {
+                self.advance();
+                Token::Pipe
+            }
             b'+' => {
                 self.advance();
                 Token::Plus
             }
             b'-' => {
                 self.advance();
-                Token::Minus
+                if self.current == Some(b'>') {
+                    self.advance();
+                    Token::Arrow
+                } else {
+                    Token::Minus
+                }
             }
             b'*' => {
                 self.advance();
@@ -251,6 +263,7 @@ impl Lexer {
             "false" => Token::False,
             "nil" => Token::Nil,
             "struct" => Token::Struct,
+            "type" => Token::Type,
             // Type keywords
             "str" => Token::TypeStr,
             "number" => Token::TypeNumber,

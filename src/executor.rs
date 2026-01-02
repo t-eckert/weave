@@ -8,7 +8,10 @@ pub enum Value {
     Number(f64),
     Boolean(bool),
     Nil,
-    Struct(HashMap<String, Value>),
+    Struct {
+        type_name: String,
+        fields: HashMap<String, Value>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -17,8 +20,14 @@ struct StructDef {
 }
 
 #[derive(Debug, Clone)]
+struct TypeAlias {
+    variants: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
 struct Function {
-    params: Vec<String>,
+    params: Vec<(String, Option<Type>)>,
+    return_type: Option<Type>,
     body: Vec<Stmt>,
 }
 
@@ -27,6 +36,7 @@ pub struct Executor {
     variables: HashMap<String, Value>,
     functions: HashMap<String, Function>,
     structs: HashMap<String, StructDef>,
+    type_aliases: HashMap<String, TypeAlias>,
 }
 
 impl Executor {
@@ -36,6 +46,7 @@ impl Executor {
             variables: HashMap::new(),
             functions: HashMap::new(),
             structs: HashMap::new(),
+            type_aliases: HashMap::new(),
         }
     }
 
@@ -55,9 +66,15 @@ impl Executor {
                 let result = self.evaluate_expression(value);
                 self.variables.insert(name.clone(), result);
             }
-            Stmt::Function { name, params, body } => {
+            Stmt::Function {
+                name,
+                params,
+                return_type,
+                body,
+            } => {
                 let func = Function {
                     params: params.clone(),
+                    return_type: return_type.clone(),
                     body: body.clone(),
                 };
                 self.functions.insert(name.clone(), func);
@@ -107,6 +124,12 @@ impl Executor {
                     fields: fields.clone(),
                 };
                 self.structs.insert(name.clone(), struct_def);
+            }
+            Stmt::TypeAlias { name, variants } => {
+                let type_alias = TypeAlias {
+                    variants: variants.clone(),
+                };
+                self.type_aliases.insert(name.clone(), type_alias);
             }
         }
     }
@@ -172,9 +195,21 @@ impl Executor {
                         // Save current variables
                         let saved_vars = self.variables.clone();
 
-                        // Bind parameters to arguments
-                        for (param, value) in func.params.iter().zip(arg_values.iter()) {
-                            self.variables.insert(param.clone(), value.clone());
+                        // Bind parameters to arguments with type checking
+                        for ((param_name, param_type), value) in
+                            func.params.iter().zip(arg_values.iter())
+                        {
+                            // Type check if type annotation exists
+                            if let Some(expected_type) = param_type {
+                                if !self.type_matches(value, expected_type) {
+                                    eprintln!(
+                                        "Type mismatch for parameter '{}' in function '{}': expected {:?}, got {:?}",
+                                        param_name, name, expected_type, value
+                                    );
+                                    return Value::Nil;
+                                }
+                            }
+                            self.variables.insert(param_name.clone(), value.clone());
                         }
 
                         // Execute function body
@@ -250,12 +285,18 @@ impl Executor {
                     }
                 }
 
-                Value::Struct(field_values)
+                Value::Struct {
+                    type_name: name.clone(),
+                    fields: field_values,
+                }
             }
             Expr::FieldAccess { object, field } => {
                 let obj_value = self.evaluate_expression(object);
                 match obj_value {
-                    Value::Struct(fields) => fields.get(field).cloned().unwrap_or_else(|| {
+                    Value::Struct {
+                        type_name: _,
+                        fields,
+                    } => fields.get(field).cloned().unwrap_or_else(|| {
                         eprintln!("Field '{}' not found on struct", field);
                         std::process::exit(1);
                     }),
@@ -273,6 +314,30 @@ impl Executor {
             (Value::String(_), Type::Str) => true,
             (Value::Number(_), Type::Number) => true,
             (Value::Boolean(_), Type::Bool) => true,
+            (Value::String(s), Type::Custom(type_name)) => {
+                // Check if it's a type alias (union type)
+                if let Some(type_alias) = self.type_aliases.get(type_name) {
+                    // For string literal unions, check if value is in variants
+                    type_alias.variants.contains(s)
+                } else {
+                    // Not a type alias, might be trying to use a struct type for a string
+                    false
+                }
+            }
+            (
+                Value::Struct {
+                    type_name,
+                    fields: _,
+                },
+                Type::Custom(expected_type),
+            ) => {
+                // Check that the struct's type matches the expected type
+                type_name == expected_type
+            }
+            (Value::String(s), Type::Union(variants)) => {
+                // Direct union type check
+                variants.contains(s)
+            }
             _ => false,
         }
     }
@@ -327,7 +392,10 @@ impl Executor {
             Value::Number(n) => n.to_string(),
             Value::Boolean(b) => b.to_string(),
             Value::Nil => "nil".to_string(),
-            Value::Struct(fields) => {
+            Value::Struct {
+                type_name: _,
+                fields,
+            } => {
                 let field_strs: Vec<String> = fields
                     .iter()
                     .map(|(k, v)| format!("{}: {}", k, self.value_to_string(v)))
