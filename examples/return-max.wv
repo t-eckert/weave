@@ -1,0 +1,14 @@
+fn max(a: number, b: number) -> number {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+print("max(10, 20) = ")
+print(max(10, 20))
+print("\n")
+
+print("max(30, 15) = ")
+print(max(30, 15))
+print("\n")

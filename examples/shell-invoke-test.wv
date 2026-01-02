@@ -1,1 +1,18 @@
-$(echo "Hello")
+# Shell commands can be quickly executed by wrapping them in $() and calling `exec`.
+# By default, this will fork and call the command in the shell that is running the script.
+$(echo "Hello").exec()
+
+# You can also specify which shell will run the command by passing a path to the shell executable.
+# This is inspired by the #! syntax.
+$(cat file.txt).using("/bin/zsh").exec()
+
+# Shell commands do not need to be immediately executed, they can be stored and executed later.
+let curl_cmd = $(curl https://google.com)
+curl_cmd.exec()
+
+# The result of the execution is returned to the script as a CmdResp type. 
+let resp = $(curl https://google.com).exec()
+print(resp.std_out) # Prints the bytes from standard out
+print(resp.std_err) # Prints the bytes from standard err
+print(resp.exit_code) # Prints the exit code
+

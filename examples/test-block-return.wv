@@ -1,0 +1,8 @@
+fn test() -> number {
+	{
+		return 42
+	}
+}
+
+let result = test()
+print(result)

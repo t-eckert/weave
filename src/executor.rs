@@ -57,14 +57,16 @@ impl Executor {
         }
     }
 
-    fn execute_statement(&mut self, stmt: &Stmt) {
+    fn execute_statement(&mut self, stmt: &Stmt) -> Option<Value> {
         match stmt {
             Stmt::Expression(expr) => {
                 self.evaluate_expression(expr);
+                None
             }
             Stmt::Let { name, value } => {
                 let result = self.evaluate_expression(value);
                 self.variables.insert(name.clone(), result);
+                None
             }
             Stmt::Function {
                 name,
@@ -78,6 +80,7 @@ impl Executor {
                     body: body.clone(),
                 };
                 self.functions.insert(name.clone(), func);
+                None
             }
             Stmt::If {
                 condition,
@@ -87,13 +90,18 @@ impl Executor {
                 let cond_result = self.evaluate_expression(condition);
                 if self.is_truthy(&cond_result) {
                     for stmt in then_branch {
-                        self.execute_statement(stmt);
+                        if let Some(return_val) = self.execute_statement(stmt) {
+                            return Some(return_val);
+                        }
                     }
                 } else if let Some(else_stmts) = else_branch {
                     for stmt in else_stmts {
-                        self.execute_statement(stmt);
+                        if let Some(return_val) = self.execute_statement(stmt) {
+                            return Some(return_val);
+                        }
                     }
                 }
+                None
             }
             Stmt::While { condition, body } => {
                 loop {
@@ -102,34 +110,42 @@ impl Executor {
                         break;
                     }
                     for stmt in body {
-                        self.execute_statement(stmt);
+                        if let Some(return_val) = self.execute_statement(stmt) {
+                            return Some(return_val);
+                        }
                     }
                 }
+                None
             }
             Stmt::Return(value) => {
                 if let Some(expr) = value {
-                    let _result = self.evaluate_expression(expr);
-                    println!("Return: {:?}", _result);
+                    let result = self.evaluate_expression(expr);
+                    Some(result)
                 } else {
-                    println!("Return: nil");
+                    Some(Value::Nil)
                 }
             }
             Stmt::Block(statements) => {
                 for stmt in statements {
-                    self.execute_statement(stmt);
+                    if let Some(return_val) = self.execute_statement(stmt) {
+                        return Some(return_val);
+                    }
                 }
+                None
             }
             Stmt::Struct { name, fields } => {
                 let struct_def = StructDef {
                     fields: fields.clone(),
                 };
                 self.structs.insert(name.clone(), struct_def);
+                None
             }
             Stmt::TypeAlias { name, variants } => {
                 let type_alias = TypeAlias {
                     variants: variants.clone(),
                 };
                 self.type_aliases.insert(name.clone(), type_alias);
+                None
             }
         }
     }
@@ -212,15 +228,19 @@ impl Executor {
                             self.variables.insert(param_name.clone(), value.clone());
                         }
 
-                        // Execute function body
+                        // Execute function body and capture return value
+                        let mut return_value = Value::Nil;
                         for stmt in &func.body {
-                            self.execute_statement(stmt);
+                            if let Some(ret_val) = self.execute_statement(stmt) {
+                                return_value = ret_val;
+                                break;
+                            }
                         }
 
                         // Restore variables
                         self.variables = saved_vars;
 
-                        return Value::Nil;
+                        return return_value;
                     }
 
                     // Unknown function
