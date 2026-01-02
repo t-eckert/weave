@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::ast::{Ast, BinaryOp, Expr, Stmt, UnaryOp};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -10,28 +12,32 @@ pub enum Value {
 
 pub struct Executor {
     ast: Ast,
+    variables: HashMap<String, Value>,
 }
 
 impl Executor {
     pub fn new(ast: Ast) -> Self {
-        Executor { ast }
+        Executor {
+            ast,
+            variables: HashMap::new(),
+        }
     }
 
-    pub fn exec(&self) {
-        for statement in &self.ast.statements {
+    pub fn exec(&mut self) {
+        let statements = self.ast.statements.clone();
+        for statement in &statements {
             self.execute_statement(statement);
         }
     }
 
-    fn execute_statement(&self, stmt: &Stmt) {
+    fn execute_statement(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::Expression(expr) => {
                 self.evaluate_expression(expr);
             }
             Stmt::Let { name, value } => {
-                let _result = self.evaluate_expression(value);
-                // For now, just evaluate - no variable storage yet
-                println!("Let binding: {} = {:?}", name, _result);
+                let result = self.evaluate_expression(value);
+                self.variables.insert(name.clone(), result);
             }
             Stmt::Function { name, params, body: _ } => {
                 println!("Function declaration: {}({:?})", name, params);
@@ -54,7 +60,11 @@ impl Executor {
                 }
             }
             Stmt::While { condition, body } => {
-                while self.is_truthy(&self.evaluate_expression(condition)) {
+                loop {
+                    let cond_result = self.evaluate_expression(condition);
+                    if !self.is_truthy(&cond_result) {
+                        break;
+                    }
                     for stmt in body {
                         self.execute_statement(stmt);
                     }
@@ -76,16 +86,17 @@ impl Executor {
         }
     }
 
-    fn evaluate_expression(&self, expr: &Expr) -> Value {
+    fn evaluate_expression(&mut self, expr: &Expr) -> Value {
         match expr {
             Expr::String(s) => Value::String(s.clone()),
             Expr::Number(n) => Value::Number(*n),
             Expr::Boolean(b) => Value::Boolean(*b),
             Expr::Nil => Value::Nil,
             Expr::Identifier(name) => {
-                // For now, just return nil - no variable lookup yet
-                println!("Identifier lookup: {}", name);
-                Value::Nil
+                self.variables.get(name).cloned().unwrap_or_else(|| {
+                    eprintln!("Undefined variable: {}", name);
+                    Value::Nil
+                })
             }
             Expr::Binary {
                 left,
@@ -123,6 +134,11 @@ impl Executor {
 
     fn evaluate_binary_op(&self, left: &Value, op: &BinaryOp, right: &Value) -> Value {
         match (left, op, right) {
+            // String concatenation
+            (Value::String(l), BinaryOp::Add, Value::String(r)) => {
+                Value::String(format!("{}{}", l, r))
+            }
+            // Number operations
             (Value::Number(l), BinaryOp::Add, Value::Number(r)) => Value::Number(l + r),
             (Value::Number(l), BinaryOp::Subtract, Value::Number(r)) => Value::Number(l - r),
             (Value::Number(l), BinaryOp::Multiply, Value::Number(r)) => Value::Number(l * r),
@@ -131,6 +147,7 @@ impl Executor {
             (Value::Number(l), BinaryOp::LessEqual, Value::Number(r)) => Value::Boolean(l <= r),
             (Value::Number(l), BinaryOp::Greater, Value::Number(r)) => Value::Boolean(l > r),
             (Value::Number(l), BinaryOp::GreaterEqual, Value::Number(r)) => Value::Boolean(l >= r),
+            // Equality (works for all types)
             (l, BinaryOp::Equal, r) => Value::Boolean(l == r),
             (l, BinaryOp::NotEqual, r) => Value::Boolean(l != r),
             _ => {

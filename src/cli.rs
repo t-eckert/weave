@@ -56,6 +56,6 @@ fn run(file: &PathBuf) {
     dbg!(&ast);
 
     // Executor: execute the AST
-    let executor = Executor::new(ast);
+    let mut executor = Executor::new(ast);
     executor.exec();
 }
