@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{Ast, BinaryOp, Expr, Stmt, UnaryOp};
+use crate::ast::{Ast, BinaryOp, Expr, Stmt, Type, UnaryOp};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -8,6 +8,12 @@ pub enum Value {
     Number(f64),
     Boolean(bool),
     Nil,
+    Struct(HashMap<String, Value>),
+}
+
+#[derive(Debug, Clone)]
+struct StructDef {
+    fields: Vec<(String, Type)>,
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +26,7 @@ pub struct Executor {
     ast: Ast,
     variables: HashMap<String, Value>,
     functions: HashMap<String, Function>,
+    structs: HashMap<String, StructDef>,
 }
 
 impl Executor {
@@ -28,6 +35,7 @@ impl Executor {
             ast,
             variables: HashMap::new(),
             functions: HashMap::new(),
+            structs: HashMap::new(),
         }
     }
 
@@ -93,6 +101,12 @@ impl Executor {
                 for stmt in statements {
                     self.execute_statement(stmt);
                 }
+            }
+            Stmt::Struct { name, fields } => {
+                let struct_def = StructDef {
+                    fields: fields.clone(),
+                };
+                self.structs.insert(name.clone(), struct_def);
             }
         }
     }
@@ -184,6 +198,82 @@ impl Executor {
                 Value::Nil
             }
             Expr::Grouping(inner) => self.evaluate_expression(inner),
+            Expr::StructLiteral { name, fields } => {
+                // Get struct definition
+                let struct_def = self.structs.get(name).cloned().unwrap_or_else(|| {
+                    eprintln!("Undefined struct: {}", name);
+                    std::process::exit(1);
+                });
+
+                // Create a HashMap for field values
+                let mut field_values = HashMap::new();
+
+                // Check that all defined fields are provided and type-check them
+                for (field_name, field_type) in &struct_def.fields {
+                    // Find the field in the provided fields
+                    let field_value = fields
+                        .iter()
+                        .find(|(name, _)| name == field_name)
+                        .map(|(_, expr)| self.evaluate_expression(expr));
+
+                    match field_value {
+                        Some(value) => {
+                            // Type check
+                            if !self.type_matches(&value, field_type) {
+                                eprintln!(
+                                    "Type mismatch for field '{}': expected {:?}, got {:?}",
+                                    field_name, field_type, value
+                                );
+                                std::process::exit(1);
+                            }
+                            field_values.insert(field_name.clone(), value);
+                        }
+                        None => {
+                            eprintln!("Missing field '{}' in struct {}", field_name, name);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                // Check for extra fields
+                for (provided_field, _) in fields {
+                    if !struct_def
+                        .fields
+                        .iter()
+                        .any(|(name, _)| name == provided_field)
+                    {
+                        eprintln!(
+                            "Unknown field '{}' in struct {}",
+                            provided_field, name
+                        );
+                        std::process::exit(1);
+                    }
+                }
+
+                Value::Struct(field_values)
+            }
+            Expr::FieldAccess { object, field } => {
+                let obj_value = self.evaluate_expression(object);
+                match obj_value {
+                    Value::Struct(fields) => fields.get(field).cloned().unwrap_or_else(|| {
+                        eprintln!("Field '{}' not found on struct", field);
+                        std::process::exit(1);
+                    }),
+                    _ => {
+                        eprintln!("Cannot access field on non-struct value");
+                        std::process::exit(1);
+                    }
+                }
+            }
+        }
+    }
+
+    fn type_matches(&self, value: &Value, expected_type: &Type) -> bool {
+        match (value, expected_type) {
+            (Value::String(_), Type::Str) => true,
+            (Value::Number(_), Type::Number) => true,
+            (Value::Boolean(_), Type::Bool) => true,
+            _ => false,
         }
     }
 
@@ -237,6 +327,13 @@ impl Executor {
             Value::Number(n) => n.to_string(),
             Value::Boolean(b) => b.to_string(),
             Value::Nil => "nil".to_string(),
+            Value::Struct(fields) => {
+                let field_strs: Vec<String> = fields
+                    .iter()
+                    .map(|(k, v)| format!("{}: {}", k, self.value_to_string(v)))
+                    .collect();
+                format!("{{ {} }}", field_strs.join(", "))
+            }
         }
     }
 }

@@ -42,6 +42,12 @@ pub enum Token {
     True,
     False,
     Nil,
+    Struct,
+
+    // Type keywords
+    TypeStr,
+    TypeNumber,
+    TypeBool,
 
     // Special
     Eof,
@@ -244,6 +250,11 @@ impl Lexer {
             "true" => Token::True,
             "false" => Token::False,
             "nil" => Token::Nil,
+            "struct" => Token::Struct,
+            // Type keywords
+            "str" => Token::TypeStr,
+            "number" => Token::TypeNumber,
+            "bool" => Token::TypeBool,
             _ => Token::Identifier(value),
         }
     }

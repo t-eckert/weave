@@ -1,4 +1,4 @@
-use crate::ast::{Ast, BinaryOp, Expr, Stmt, UnaryOp};
+use crate::ast::{Ast, BinaryOp, Expr, Stmt, Type, UnaryOp};
 use crate::lexer::Token;
 
 pub struct Parser {
@@ -33,6 +33,7 @@ impl Parser {
             Token::While => self.parse_while(),
             Token::Return => self.parse_return(),
             Token::LeftBrace => self.parse_block(),
+            Token::Struct => self.parse_struct(),
             _ => self.parse_expression_statement(),
         }
     }
@@ -197,6 +198,109 @@ impl Parser {
         Stmt::Expression(expr)
     }
 
+    fn parse_struct(&mut self) -> Stmt {
+        self.advance(); // consume 'struct'
+
+        let name = match self.current_token() {
+            Token::Identifier(n) => n.clone(),
+            _ => panic!("Expected struct name"),
+        };
+        self.advance();
+
+        // Expect '{'
+        if !matches!(self.current_token(), Token::LeftBrace) {
+            panic!("Expected '{{' after struct name");
+        }
+        self.advance();
+
+        // Parse fields
+        let mut fields = Vec::new();
+        while !matches!(self.current_token(), Token::RightBrace | Token::Eof) {
+            // Field name
+            let field_name = match self.current_token() {
+                Token::Identifier(n) => n.clone(),
+                _ => panic!("Expected field name"),
+            };
+            self.advance();
+
+            // Expect ':'
+            if !matches!(self.current_token(), Token::Colon) {
+                panic!("Expected ':' after field name");
+            }
+            self.advance();
+
+            // Parse type
+            let field_type = self.parse_type();
+
+            fields.push((field_name, field_type));
+
+            // Optional comma or newline (we just skip to next field)
+            if matches!(self.current_token(), Token::Comma) {
+                self.advance();
+            }
+        }
+
+        if !matches!(self.current_token(), Token::RightBrace) {
+            panic!("Expected '}}' at end of struct");
+        }
+        self.advance();
+
+        Stmt::Struct { name, fields }
+    }
+
+    fn parse_struct_literal(&mut self, name: String) -> Expr {
+        // Expect '{'
+        if !matches!(self.current_token(), Token::LeftBrace) {
+            panic!("Expected '{{' for struct literal");
+        }
+        self.advance();
+
+        // Parse fields
+        let mut fields = Vec::new();
+        while !matches!(self.current_token(), Token::RightBrace | Token::Eof) {
+            // Field name
+            let field_name = match self.current_token() {
+                Token::Identifier(n) => n.clone(),
+                _ => panic!("Expected field name"),
+            };
+            self.advance();
+
+            // Expect ':'
+            if !matches!(self.current_token(), Token::Colon) {
+                panic!("Expected ':' after field name in struct literal");
+            }
+            self.advance();
+
+            // Parse value expression
+            let value = self.parse_expression();
+
+            fields.push((field_name, value));
+
+            // Optional comma
+            if matches!(self.current_token(), Token::Comma) {
+                self.advance();
+            }
+        }
+
+        if !matches!(self.current_token(), Token::RightBrace) {
+            panic!("Expected '}}' at end of struct literal");
+        }
+        self.advance();
+
+        Expr::StructLiteral { name, fields }
+    }
+
+    fn parse_type(&mut self) -> Type {
+        let typ = match self.current_token() {
+            Token::TypeStr => Type::Str,
+            Token::TypeNumber => Type::Number,
+            Token::TypeBool => Type::Bool,
+            _ => panic!("Expected type annotation, got {:?}", self.current_token()),
+        };
+        self.advance();
+        typ
+    }
+
     // Expression parsing (with precedence)
     fn parse_expression(&mut self) -> Expr {
         self.parse_equality()
@@ -316,33 +420,49 @@ impl Parser {
         let mut expr = self.parse_primary();
 
         loop {
-            if matches!(self.current_token(), Token::LeftParen) {
-                self.advance();
-                let mut arguments = Vec::new();
+            match self.current_token() {
+                Token::LeftParen => {
+                    // Function call
+                    self.advance();
+                    let mut arguments = Vec::new();
 
-                if !matches!(self.current_token(), Token::RightParen) {
-                    loop {
-                        arguments.push(self.parse_expression());
+                    if !matches!(self.current_token(), Token::RightParen) {
+                        loop {
+                            arguments.push(self.parse_expression());
 
-                        if matches!(self.current_token(), Token::Comma) {
-                            self.advance();
-                        } else {
-                            break;
+                            if matches!(self.current_token(), Token::Comma) {
+                                self.advance();
+                            } else {
+                                break;
+                            }
                         }
                     }
-                }
 
-                if !matches!(self.current_token(), Token::RightParen) {
-                    panic!("Expected ')' after arguments");
-                }
-                self.advance();
+                    if !matches!(self.current_token(), Token::RightParen) {
+                        panic!("Expected ')' after arguments");
+                    }
+                    self.advance();
 
-                expr = Expr::Call {
-                    callee: Box::new(expr),
-                    arguments,
-                };
-            } else {
-                break;
+                    expr = Expr::Call {
+                        callee: Box::new(expr),
+                        arguments,
+                    };
+                }
+                Token::Dot => {
+                    // Field access
+                    self.advance();
+                    let field = match self.current_token() {
+                        Token::Identifier(name) => name.clone(),
+                        _ => panic!("Expected field name after '.'"),
+                    };
+                    self.advance();
+
+                    expr = Expr::FieldAccess {
+                        object: Box::new(expr),
+                        field,
+                    };
+                }
+                _ => break,
             }
         }
 
@@ -356,7 +476,14 @@ impl Parser {
             Token::True => Expr::Boolean(true),
             Token::False => Expr::Boolean(false),
             Token::Nil => Expr::Nil,
-            Token::Identifier(name) => Expr::Identifier(name),
+            Token::Identifier(name) => {
+                // Check if this is a struct literal (Identifier followed by LeftBrace)
+                if matches!(self.peek(1), Token::LeftBrace) {
+                    self.advance(); // consume identifier
+                    return self.parse_struct_literal(name);
+                }
+                Expr::Identifier(name)
+            }
             Token::LeftParen => {
                 self.advance();
                 let expr = self.parse_expression();

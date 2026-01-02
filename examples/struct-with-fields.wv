@@ -1,0 +1,14 @@
+struct Person {
+	first_name: str
+	last_name: str
+	age: number
+}
+
+let winona = Person {
+	first_name: "Winona",
+	last_name: "Eckert",
+	age: 6,
+}
+
+print("Name: ", winona.first_name, " ", winona.last_name)
+print("Age: ", winona.age)

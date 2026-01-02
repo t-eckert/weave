@@ -1,3 +1,11 @@
+// Type annotations
+#[derive(Debug, Clone, PartialEq)]
+pub enum Type {
+    Str,
+    Number,
+    Bool,
+}
+
 // AST Node types
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
@@ -31,6 +39,18 @@ pub enum Expr {
 
     // Grouping
     Grouping(Box<Expr>),
+
+    // Struct literal
+    StructLiteral {
+        name: String,
+        fields: Vec<(String, Expr)>,
+    },
+
+    // Field access
+    FieldAccess {
+        object: Box<Expr>,
+        field: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,6 +106,12 @@ pub enum Stmt {
 
     // Block
     Block(Vec<Stmt>),
+
+    // Struct definition
+    Struct {
+        name: String,
+        fields: Vec<(String, Type)>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
