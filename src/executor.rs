@@ -116,10 +116,12 @@ impl Executor {
                 if let Expr::Identifier(name) = callee.as_ref() {
                     // Built-in functions
                     if name == "print" {
+                        let mut output = String::new();
                         for arg in arguments {
                             let value = self.evaluate_expression(arg);
-                            println!("{}", self.value_to_string(&value));
+                            output.push_str(&self.value_to_string(&value));
                         }
+                        println!("{}", output);
                         return Value::Nil;
                     }
                 }
