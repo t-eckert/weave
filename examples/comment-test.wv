@@ -1,0 +1,11 @@
+# This is a comment
+type Status = "active" | "inactive" # inline comment
+
+# Another comment
+fn test(status: Status) {
+	# Comment inside function
+	print(status)
+}
+
+# Test call
+test("active")

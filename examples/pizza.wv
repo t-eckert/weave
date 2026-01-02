@@ -1,17 +1,31 @@
+# This is a demo of the structure and associated function features in Weave
+# using Pizza orders as an example.
+
+# Discriminated unions can be defined using the vertical bar.
 type Crust = "thick" | "regular" | "thin"
 type Size = "sm" | "md" | "lg"
 
+# Structs help to organize fields and functions.
 struct Pizza {
 	crust: Crust,
 	size: Size,
+	# The number in dollars of a pizza.
 	price: number,
+	# A percentage (e.g 0.2) discount off the price of the pizza.
 	discount: number,
 }
 
+# Functions that take a struct as their first argument become associated with that struct.
+# Functions like these can be called the conventional way or with a dot notation.
+
+# tax determines how much the customer owes in tax for their pizza.
 fn tax(pizza: Pizza, percent: number) -> number {
 	return pizza.price * pizza.discount * percent
 }
 
+# All fields are required on a struct.
+# This is a purposeful design decision. If you need something to be optional, it should be handled separately from the struct itself
+# or managed using a set or discriminated union in combination with associated functions.
 let pizza = Pizza {
 	crust: "thin",
 	size: "md",

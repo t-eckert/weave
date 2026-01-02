@@ -1,1 +1,1 @@
-print("Hello, " + args.get(1) + ".")
+print("Hello, " + $1 + ".")

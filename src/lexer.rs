@@ -76,7 +76,16 @@ impl Lexer {
         let mut tokens = Vec::new();
 
         while self.current.is_some() {
-            self.skip_whitespace();
+            // Skip whitespace and comments until we find a real token
+            loop {
+                self.skip_whitespace();
+
+                if self.current == Some(b'#') {
+                    self.skip_comment();
+                } else {
+                    break;
+                }
+            }
 
             if self.current.is_none() {
                 break;
@@ -278,6 +287,18 @@ impl Lexer {
                 self.advance();
             } else {
                 break;
+            }
+        }
+    }
+
+    fn skip_comment(&mut self) {
+        // Skip line comments starting with '#'
+        if self.current == Some(b'#') {
+            while let Some(ch) = self.current {
+                if ch == b'\n' {
+                    break;
+                }
+                self.advance();
             }
         }
     }
